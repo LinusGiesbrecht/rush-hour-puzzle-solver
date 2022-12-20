@@ -220,7 +220,7 @@ class Board:
                     car.row = new_car_pos[0][0]  # update the car's row position
                     car.column = new_car_pos[0][1]  # update the car's column position
 
-        child_board = Board(None, cars, blank_spaces, size, previous_move, parent)  # initialize the new child game board
+        child_board = Board(None, cars, blank_spaces, size, previous_move, parent, parent.g_n + 1)  # initialize the new child game board
         child_board.generate_board_string()  # generate and initialize the child's board string
         child_board.find_possible_moves()  # update each car's possible move list with a new set of moves
         return child_board
@@ -361,7 +361,7 @@ def initialize_game_components(game_string, board_size=36):
                 car.fuel = int(car_fuel[1])
                 break
 
-    game_board = Board(game_string[0: board_size], cars, blank_spaces, board_size, None, None, 0)  # initialize game board
+    game_board = Board(game_string[0: board_size], cars, blank_spaces, board_size, None, None, 0, 0)  # initialize game board
     game_board.find_possible_moves()  # initialize the possible_moves list of each car
     return game_board
 
@@ -370,41 +370,34 @@ def initialize_game_components(game_string, board_size=36):
 def uniform_cost_search(game_board_string, puzzle_number):
     initial_board = initialize_game_components(game_board_string)
 
-    open_list = []
-    closed_list = []
+    open_list = dict()
+    closed_list = dict()
     goal_state_found = False
 
-    open_list.append(initial_board)  # append the initial board to the open list
+    open_list[initial_board.board_string] = initial_board  # append the initial board to the open list
     start = time()  # start algorithm time
-    while not goal_state_found and len(open_list) != 0:  # continue to search children if the goal state is not found and the open list is not 0
-        open_list.sort(key=lambda x: x.g_n, reverse=False)  # sort the open list by g(n) ascending
-        if open_list[0].is_goal_state():  # if the lowest cost node is the goal state
+    while not goal_state_found and len(open_list) != 0:  # continue to search children if the goal state is not found and the open list is not empty
+        open_list = dict(sorted(open_list.items(), key=lambda x: x[1].g_n, reverse=False))  # sort the open list by g(n) ascending
+        current_node = open_list[next(iter(open_list))]  # node with the lowest cost/g(n)
+        if current_node.is_goal_state():  # if the lowest cost node is the goal state
             goal_state_found = True
         else:  # if the lowest cost node is not the goal state
-            children = open_list[0].get_children()  # create the node's children
+            children = current_node.get_children()  # create the node's children
             for child in children:
-                if child not in closed_list:  # if the child is not already in the closed list (not visited)
-                    child.g_n = child.parent.g_n + 1
-                    board_in_open_list = False
-                    for board in open_list:  # check if child is already in the open list
-                        if board.board_string == child.board_string and child.g_n >= board.g_n:  # if the child is in the open list with a greater cost, do not add it to the open list
-                            board_in_open_list = True
-                            break
-                        elif board.board_string == child.board_string and child.g_n < board.g_n:  # if the child is in the open list with a lower cost, replace the old node with the child
-                            board_in_open_list = True
-                            open_list.remove(board)
-                            open_list.append(child)
-                            break
-                    if not board_in_open_list:  # if the child is not in the open list, append it to the open list
-                        open_list.append(child)
+                if child.board_string not in closed_list:  # if the child is not already in the closed list (not visited)
+                    if child.board_string in open_list:  # check if child is already in the open list (waiting to be visited)
+                        if child.g_n < open_list[child.board_string].g_n:  # if the current child has a lower cost than the duplicate board in the open list
+                            open_list[child.board_string] = child  # replace the duplicate board in the open list
+                    else:  # if the child board is not already in the open list, add it
+                        open_list[child.board_string] = child
 
-        closed_list.append(open_list.pop(0))  # pop the visited node and add it to the closed list
-
+        closed_list[current_node.board_string] = current_node  # pop the visited node and add it to the closed list
+        del open_list[current_node.board_string]
     end = time()  # when out of the search, stop the end time
 
     runtime = round(end - start, 2)  # calculate the runtime
     solution_path = []
-
+    closed_list = list(closed_list.values())
     if goal_state_found:  # if the goal state was found, calculate the solution path
         goal_state = closed_list[-1]  # the goal state is the last node in the closed list
         solution_path.append(goal_state)
@@ -443,28 +436,31 @@ def greedy_best_first_search(game_board_string, puzzle_number, heuristic_number)
 
     heuristic(initial_board)  # set heuristic using passed heuristic function
 
-    open_list = []
-    closed_list = []
+    open_list = dict()
+    closed_list = dict()
     goal_state_found = False
 
-    open_list.append(initial_board)  # append the initial board to the open list
+    open_list[initial_board.board_string] = initial_board  # append the initial board to the open list
     start = time()  # start algorithm time
-    while not goal_state_found and len(open_list) != 0:  # continue to search children if the goal state is not found and the open list is not 0
-        open_list.sort(key=lambda x: x.h_n, reverse=False)  # sort the open list by h(n) ascending
-        if open_list[0].is_goal_state():  # if the lowest heuristic node is the goal state
+    while not goal_state_found and len(open_list) != 0:  # continue to search children if the goal state is not found and the open list is not empty
+        open_list = dict(sorted(open_list.items(), key=lambda x: x[1].h_n, reverse=False))  # sort the open list by h(n) ascending
+        current_node = open_list[next(iter(open_list))]  # node with the lowest h(n)
+        if current_node.is_goal_state():  # if the lowest heuristic node is the goal state
             goal_state_found = True
         else:  # if the lowest heuristic node is not the goal state
-            children = open_list[0].get_children()  # create the node's children
+            children = current_node.get_children()  # create the node's children
             for child in children:
-                if child not in open_list and child not in closed_list:  # if the child is not already in the closed list (not visited)
+                if child.board_string not in open_list and child.board_string not in closed_list:  # if the child is not already in the closed list (not visited)
                     heuristic(child)  # apply the heuristic on the child before appending to the open list
-                    open_list.append(child)
+                    open_list[child.board_string] = child
 
-        closed_list.append(open_list.pop(0))  # pop the visited node and add it to the closed list
+        closed_list[current_node.board_string] = current_node  # pop the visited node from the open list and add it to the closed list
+        del open_list[current_node.board_string]
 
     end = time()  # when out of the search, stop the end time
     runtime = round(end - start, 2)  # calculate the runtime
     solution_path = []
+    closed_list = list(closed_list.values())
 
     if goal_state_found:  # if the goal state was found, calculate the solution path
         solution_path = []
@@ -505,41 +501,43 @@ def algorithm_a(game_board_string, puzzle_number, heuristic_number):
 
     heuristic(initial_board)  # set heuristic using passed heuristic function
 
-    open_list = []
-    closed_list = []
+    open_list = dict()
+    closed_list = dict()
     goal_state_found = False
 
-    open_list.append(initial_board)  # append the initial board to the open list
+    open_list[initial_board.board_string] = initial_board  # append the initial board to the open list
     start = time()  # start algorithm time
     while not goal_state_found and len(open_list) != 0:  # continue to search children if the goal state is not found and the open list is not 0
-        open_list.sort(key=lambda x: x.g_n + x.h_n, reverse=False)  # sort the open list by f(n) ascending
-        if open_list[0].is_goal_state():  # if the lowest f(n) node is the goal state
+        open_list = dict(sorted(open_list.items(), key=lambda x: x[1].g_n + x[1].h_n, reverse=False))  # sort the open list by f(n) ascending
+        current_node = open_list[next(iter(open_list))]  # node with the lowest f(n)
+        if current_node.is_goal_state():  # if the lowest f(n) node is the goal state
             goal_state_found = True
         else:  # if the lowest f(n) node is not the goal state
-            children = open_list[0].get_children()  # create the node's children
+            children = current_node.get_children()  # create the node's children
             for child in children:
-                if child not in closed_list:  # if the child is not already in the closed list (not visited)
-                    child.g_n = child.parent.g_n + 1
-                    board_in_open_list = False
-                    for board in open_list:  # check if child is already in the open list
-                        if board.board_string == child.board_string and child.g_n >= board.g_n:  # if the child is in the open list with a greater cost, do not add it to the open list
-                            board_in_open_list = True
-                            break
-                        elif board.board_string == child.board_string and child.g_n < board.g_n:  # if the child is in the open list with a lower cost, replace the old node with the child
-                            board_in_open_list = True
-                            open_list.remove(board)
-                            heuristic(child)  # apply the heuristic on the child before appending to the open list
-                            open_list.append(child)
-                            break
-                    if not board_in_open_list:  # if the child is not in the open list, append it to the open list
-                        heuristic(child)  # apply the heuristic on the child before appending to the open list
-                        open_list.append(child)
+                # if the child is in already in the closed list (visited) with a lower cost, remove it from the closed list and add it to the open list
+                if child.board_string in closed_list:
+                    if child.g_n < closed_list[child.board_string].g_n:
+                        del closed_list[child.board_string]
+                        heuristic(child)
+                        open_list[child.board_string] = child
 
-        closed_list.append(open_list.pop(0))  # pop the visited node and add it to the closed list
+                else:
+                    if child.board_string not in open_list:
+                        heuristic(child)
+                        open_list[child.board_string] = child
+                    else:
+                        if child.g_n < open_list[child.board_string].g_n:
+                            heuristic(child)
+                            open_list[child.board_string] = child
+
+        closed_list[current_node.board_string] = current_node  # pop the visited node and add it to the closed list
+        del open_list[current_node.board_string]
 
     end = time()  # when out of the search, stop the end time
     runtime = round(end - start, 2)  # calculate the runtime
     solution_path = []
+    closed_list = list(closed_list.values())
 
     if goal_state_found:  # if the goal state was found, calculate the solution path
         solution_path = []
@@ -564,22 +562,28 @@ def algorithm_a(game_board_string, puzzle_number, heuristic_number):
 
 # creates and writes to a solution file
 def create_solution_file(algorithm_name, puzzle_number, initial_board, game_board_string, runtime, found_goal_state, heuristic_number=None, search_path=None, solution_path=None):
-    file_name = f"{algorithm_name}-sol-{puzzle_number}"
+    file_name = f"{algorithm_name}-sol-{puzzle_number}"  # solution file name without heuristic
     if heuristic_number:
-        file_name = f"{algorithm_name}-h{heuristic_number}-sol-{puzzle_number}"
+        file_name = f"{algorithm_name}-h{heuristic_number}-sol-{puzzle_number}"  # solution file name with heuristic
     with open(file_name, "w") as file:
-        file.write(f"Initial board configuration: {game_board_string}\n")
+        file.write(f"Initial board configuration: {game_board_string}\n")  # initial game board configuration string
         file.write(f"\n{str(initial_board)}\n")
         file.write("Car fuel available: ")
-        file.write(', '.join([car.name + ":" + str(car.fuel) for car in initial_board.cars]) + "\n\n")
+        file.write(', '.join([car.name + ":" + str(car.fuel) for car in initial_board.cars]) + "\n\n")  # available car fuel string
 
         if found_goal_state:
             file.write(f"Runtime: {runtime} seconds\n")
             file.write(f"Search path length: {len(search_path)} states\n")
             file.write(f"Solution path length: {len(solution_path)} moves\n")
-            file.write(f"Solution path: {'; '.join([node.previous_move for node in solution_path if node.previous_move])}\n\n")
-            for node in solution_path:
-                file.write(f"{node.previous_move}\t{[car.fuel for car in node.cars if car.name == node.previous_move[0]][0]} {node.board_string}\n")
+            file.write(f"Solution path: {'; '.join([node.previous_move for node in solution_path if node.previous_move])}\n\n")  # list of moves in solution path
+            for node in solution_path:  # for each board in the solution path
+                # display the board, the previous move, and the fuel state for the moving car
+                moving_car_fuel = 0
+                for car in node.cars:
+                    if car.name == node.previous_move[0]:
+                        moving_car_fuel = car.fuel
+                        break
+                file.write(f"{node.previous_move}\t{moving_car_fuel} {node.board_string}\n")
             file.write(f"\n{solution_path[-1]}")
         else:
             file.write("Sorry, could not solve the puzzle as specified.\n")
@@ -698,7 +702,7 @@ def solve_puzzles(game_file, with_ucs=False, with_gbfs=False, with_algo_a=False,
                                  len(game_info["search_path"]),
                                  game_info["runtime"]])
 
-    # if create_excel_file=True, create data frame with each algorithms search data and output to an excel file
+    # if create_excel_file=True, create data frame with each algorithm's search data and output to an Excel file
     if create_excel_file:
         df = pd.DataFrame(data, columns=["Puzzle Number", "Algorithm", "Heuristic", "Length of the Solution", "Length of the Search Path", "Execution Time (in seconds)"])
         with pd.ExcelWriter("rush_hour_analysis.xlsx") as writer:
